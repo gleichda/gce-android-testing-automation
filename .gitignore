@@ -1,0 +1,6 @@
+.terraform/
+.terraform.lock.hcl
+build-events.zip
+terraform.tfstate*
+.terraform.tfstate.lock.info
+terraform.tfvars

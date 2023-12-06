@@ -1,13 +1,17 @@
 resource "google_storage_bucket" "android_images" {
-  name     = "${var.project_id}-android-images"
-  project  = var.project_id
-  location = var.region
+  name       = "${var.project_id}-android-images"
+  project    = var.project_id
+  location   = var.region
+  depends_on = [google_project_service.services]
+
 }
 
 resource "google_storage_bucket" "tf_state" {
-  name     = "${var.project_id}-terraform-state"
-  project  = var.project_id
-  location = var.tfstate_bucket_location
+  name       = "${var.project_id}-terraform-state"
+  project    = var.project_id
+  location   = var.tfstate_bucket_location
+  depends_on = [google_project_service.services]
+
 }
 
 resource "google_storage_notification" "notification" {
@@ -15,19 +19,25 @@ resource "google_storage_notification" "notification" {
   payload_format = "JSON_API_V1"
   topic          = google_pubsub_topic.build_events.id
   event_types    = ["OBJECT_FINALIZE"]
-  depends_on     = [google_pubsub_topic_iam_binding.binding]
+  depends_on = [
+    google_pubsub_topic_iam_binding.binding,
+    google_project_service.services
+  ]
 }
 
 // Enable notifications by giving the correct IAM permission to the unique service account.
 data "google_storage_project_service_account" "gcs_account" {
-  project = var.project_id
+  project    = var.project_id
+  depends_on = [google_project_service.services]
+
 }
 
 // Create a Pub/Sub topic.
 resource "google_pubsub_topic_iam_binding" "binding" {
-  topic   = google_pubsub_topic.build_events.id
-  role    = "roles/pubsub.publisher"
-  members = ["serviceAccount:${data.google_storage_project_service_account.gcs_account.email_address}"]
+  topic      = google_pubsub_topic.build_events.id
+  role       = "roles/pubsub.publisher"
+  members    = ["serviceAccount:${data.google_storage_project_service_account.gcs_account.email_address}"]
+  depends_on = [google_project_service.services]
 }
 
 resource "google_project_service" "services" {
@@ -37,14 +47,17 @@ resource "google_project_service" "services" {
 }
 
 resource "google_sourcerepo_repository" "my-repo" {
-  name    = "android-ci"
-  project = var.project_id
+  name       = "android-ci"
+  project    = var.project_id
+  depends_on = [google_project_service.services]
+
 }
 
 resource "google_service_account" "iac" {
   account_id   = "iac-sa"
   display_name = "IAC"
   project      = var.project_id
+  depends_on   = [google_project_service.services]
 }
 
 resource "google_sourcerepo_repository_iam_member" "iac" {
@@ -52,18 +65,21 @@ resource "google_sourcerepo_repository_iam_member" "iac" {
   repository = google_sourcerepo_repository.my-repo.name
   role       = "roles/source.reader"
   member     = "serviceAccount:${google_service_account.iac.email}"
+  depends_on = [google_project_service.services]
 }
 
 resource "google_project_iam_member" "iac" {
-  for_each = var.iac_roles
-  project  = var.project_id
-  member   = "serviceAccount:${google_service_account.iac.email}"
-  role     = each.key
+  for_each   = var.iac_roles
+  project    = var.project_id
+  member     = "serviceAccount:${google_service_account.iac.email}"
+  role       = each.key
+  depends_on = [google_project_service.services]
 }
 
 resource "google_pubsub_topic" "build_events" {
-  name    = "build-events"
-  project = var.project_id
+  name       = "build-events"
+  project    = var.project_id
+  depends_on = [google_project_service.services]
 }
 
 module "event-function" {
@@ -86,4 +102,5 @@ module "event-function" {
   bucket_force_destroy = true
   max_instances        = 10
   timeout_s            = 540
+  depends_on           = [google_project_service.services]
 }
